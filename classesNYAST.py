@@ -13,6 +13,7 @@ class App:
         self.clock = pygame.time.Clock()
         self.frame_rate = 100
         self.dt = 1 / self.clock.tick(self.frame_rate)
+        self.running = False
 
     def init_game(self):
         game_render.init()
@@ -22,6 +23,8 @@ class App:
     def on_event(self, event):
         if event.type == pygame.QUIT:
             self.running = False
+        elif event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
+            game_input.check_mouse()
         elif event.type in [pygame.KEYDOWN, pygame.KEYUP]: # kollar vilka som är nedpressade och vilka som släpps
             game_input.check_key_state(event.type, event.key) # gå till check_key_state för att adda knappar
         else:
@@ -33,6 +36,7 @@ class App:
         game_input.do_movement() # justerar position, kontrollerar hastighet
         player.blocker_list.clear()
         player._on_loop()
+        spells.on_loop_spells()
         pass
 
     def on_render(self):
@@ -157,11 +161,11 @@ class Input:
                 print(player.strength)
                 print(player.current_hp)
             elif event_key == pygame.K_2:
-                heal.cast_spell(player)
+                pass
             elif event_key == pygame.K_3:
-                haste.cast_spell(player)
+                pass
             elif event_key == pygame.K_4:
-                strength_spell.cast_spell(player)
+                pass
         elif key_state == pygame.KEYUP:
             if event_key == pygame.K_DOWN:
                 self.down_held = False
@@ -171,6 +175,8 @@ class Input:
                 self.left_held = False
             elif event_key == pygame.K_RIGHT:
                 self.right_held = False
+            elif event_key == pygame.K_3:
+                spells.charge_and_cast_spell(player, player)
         else:
             pass
 
@@ -233,6 +239,12 @@ class Input:
             player.sprite_rect.centerx = player.location[0]
         else:
             pass
+
+    def check_mouse(self):
+        mouse_pos = pygame.mouse.get_pos()
+        if pygame.mouse.get_pressed()[0]:
+            print("Left", mouse_pos)
+
 
 class Player:
     def __init__(self, name, sprite, level, max_hp, max_mp, strength, intelligence, agility):
@@ -449,7 +461,7 @@ class Player:
 
     def hit_by_spell_check(self, effect_value):
         chance_bonus = 0.001 * abs(effect_value)
-        random_num = random() + chance_bonus
+        random_num = random() + chance_bonus - (0.01 * self.get_magic_resist())
         if random_num > 0.95:
             self.gain_skill("magic_resist")
         else:
@@ -459,11 +471,13 @@ class Player:
         skill_amount_random = random()
         if skill_amount_random < 33:
             skill_gain = 0.3
-        if skill_amount_random > 33 and skill_amount_random < 67:
+            self.skills_dict[str(skill)] += skill_gain
+        if 67 > skill_amount_random > 33:
             skill_gain = 0.6
+            self.skills_dict[str(skill)] += skill_gain
         if skill_amount_random > 66:
             skill_gain = 0.9
-        self.skills_dict[skill] += skill_gain
+            self.skills_dict[str(skill)] += skill_gain
 
     # lägg allt som ska loopas här, och kalla denna från main on_loop!
     def _on_loop(self):
@@ -542,19 +556,20 @@ class Game_UI:
         pass
 
     def display_spell_cast_bar(self):
-        index = 0
+        spell_timer = spells.get_spell_timer()
+        cast_time = spells.get_cast_time()
+        time_left_cast = cast_time - spell_timer
+        index = time_left_cast
         self.spell_cast_bar_rect.centerx = player.sprite_rect.centerx
         self.spell_cast_bar_rect.centery = player.sprite_rect.centery - 32
-        while True:
-            if index < player.spell_timer:
-                #self.spell_cast_bar_rect.inflate(index, 0)
-                game_render.screen.blit(self.spell_cast_bar,
-                                        (self.spell_cast_bar_rect.centerx + index, self.spell_cast_bar_rect.centery))
-                game_render.screen.blit(self.spell_cast_bar,
-                                        (self.spell_cast_bar_rect.centerx - index, self.spell_cast_bar_rect.centery))
-                index += 1 * theapp.dt
-            else:
-                return False
+
+        while index > 0:
+            #self.spell_cast_bar_rect.inflate(index, 0)
+            game_render.screen.blit(self.spell_cast_bar,
+                                    (self.spell_cast_bar_rect.centerx + index, self.spell_cast_bar_rect.centery))
+            game_render.screen.blit(self.spell_cast_bar,
+                                    (self.spell_cast_bar_rect.centerx - index, self.spell_cast_bar_rect.centery))
+            index -= 1 * theapp.dt
 
 class Monster(Player):
     pass
@@ -648,20 +663,85 @@ class Spells_new:
     # klassen ska ta över allt som har med spells att göra, inklusive spell-timers och att kalla rätt renderings-
     # metoder för att visa spell-grafik t ex cast-bar och själva spellsens grafik.
     def __init__(self):
+        self.spell_cast_time = 0
         self.spell_timer = 0
+        self.spell_timer_on = False
         self.caster = None
         self.victim = None
+        self.casting_spell = False
         # lägg in spells i spell_dict enligt heal-mallen. Obs att key måste finnas i cast_spell-metoden
         self.spell_dict = {"heal": {"name": "heal", "mp_cost": 10, "effect_value": 10, "cast_time": 5,
                                     "spell_duration": 0, "type": "hp", "gfx": "blabla.png",
-                                    "active": True},
+                                    "active": False},
                            "haste": {"name": "haste", "mp_cost": 10, "effect_value": 100, "cast_time": 5,
                                      "spell_duration": 120, "type": "movement_speed", "gfx": "blabla.png",
                                      "active": False},
+                           "harm": {"name": "harm", "mp_cost": 10, "effect_value": -50, "cast_time": 10,
+                                              "spell_duration": 0, "type": "hp", "gfx": "blabla.png",
+                                              "active": True},
                            "spell_template": {"name": "template", "mp_cost": 0, "effect_value": 0, "cast_time": 0,
                                               "spell_duration": 0, "type": "0", "gfx": "blabla.png",
-                                              "active": False}}
+                                              "active": False}
+                           }
                             # kopiera spell_template för att lägga till fler spells!
+
+    # Aktiverar spellen som callas som attribut, deaktiverar alla andra spells
+    def activate_spell(self, spell):
+            for spell_in_dict in self.spell_dict:
+                if ["active"]:
+                    self.spell_dict[str(spell_in_dict)]["active"] = False
+            self.spell_dict[str(spell)]["active"] = True
+
+    def print_spell_dict(self):
+        print(self.spell_dict)
+
+    def check_timer_and_cast(self):
+        if self.casting_spell:
+            if self.spell_timer_on:
+                if self.spell_timer < self.spell_cast_time:
+                    game_ui.display_spell_cast_bar()
+                    print("Waiting to cast")
+                    print("cast time:", self.spell_cast_time)
+                    print("spell timer:", self.spell_timer)
+                if self.spell_timer >= self.spell_cast_time:
+                    print("Casting now!")
+                    spells.cast_spell(self.caster, self.victim)
+                    self.caster = None
+                    self.victim = None
+                    self.spell_timer_on = False
+                    self.spell_cast_time = 0
+
+    def spell_timer_switch(self, state):
+        self.spell_timer_on = state
+
+    def get_spell_timer(self):
+        return self.spell_timer
+
+    def get_cast_time(self):
+        return self.spell_cast_time
+
+    def charge_and_cast_spell(self, caster, victim): # kalla denna för att påbörja spellcast
+        if not self.casting_spell:
+            self.casting_spell = True
+            for spell_in_dict in self.spell_dict:
+                if self.spell_dict[spell_in_dict]["active"]:
+                    self.spell_cast_time = self.spell_dict[str(spell_in_dict)]["cast_time"]
+                    print(self.spell_dict[spell_in_dict]["cast_time"], "är cast time enligt spell_dict, medan följande är spell_cast_time:", self.spell_cast_time)
+            self.spell_timer_switch(True)
+            self.caster = caster
+            self.victim = victim
+        else:
+            print("You are already casting a spell")
+
+    def spell_timer_control(self):
+        if self.spell_timer_on:
+            print(self.spell_cast_time)
+            print(self.spell_timer)
+            self.spell_timer += (1 * theapp.dt)
+            self.check_timer_and_cast()
+        if not self.spell_timer_on:
+            self.spell_timer = 0
+
 
 # metod som helt sköter castande och healing/skada osv.
     # OBS att damage ska vara av typ "hp" och ha negativt värde, precis som heal är typ "hp" med positivt värde.
@@ -669,23 +749,22 @@ class Spells_new:
     # spelaren ska sedan efter casten få en cooldown där spelaren inte kan casta spells, beroende på hur lång CD
     # spellen har. Eller UO-style med cast time och sedan inte cooldown? Helst UO-varianten. Kika på detta och fixa.
     def cast_spell(self, caster, victim):
-        spell_modifier = caster.get_caster_spell_modifier()
+        spell_modifier = caster.get_player_spell_modifier()
         mp_cost_reduction = caster.get_player_mp_cost_reduction()
         caster_mp = caster.get_current_mp()
         victim_magic_resist = victim.get_magic_resist()
         if caster.can_cast_spell:
             for spell in self.spell_dict:
-                if spell["active"] == True:
-                    for active_spell in spell:
-                        real_mp_cost = active_spell["mp_cost"] - (active_spell["mp_cost"] * mp_cost_reduction)
+                if ["active"]:
+                    if ["active"]:  # fixa bort den här jäveln, orkar inte fixa indentet
+                        real_mp_cost = self.spell_dict[(spell)]["mp_cost"] - (self.spell_dict[(spell)]["mp_cost"] * mp_cost_reduction)
                         if not real_mp_cost > caster_mp:
                             caster.change_current_mp(-real_mp_cost)
-                            spell_type = spell["type"]
-                            spell_effect_value = spell["effect_value"]
+                            spell_type = self.spell_dict[(spell)]["type"]
+                            spell_effect_value = self.spell_dict[(spell)]["effect_value"]
                             real_spell_effect_value = spell_effect_value + (spell_effect_value * spell_modifier) # använd vid positiva
                             real_spell_effect_value_resisted = spell_effect_value + (spell_effect_value * spell_modifier) \
                                                         - (spell_effect_value * victim_magic_resist) # använd vid negativa
-                            # lägg in delay här, som visas med en cast-bar!!! så kommer det stämma.
                             if spell_type in ["hp"]:
                                 if spell_effect_value > 0:
                                     victim.change_current_hp(real_spell_effect_value)
@@ -693,9 +772,17 @@ class Spells_new:
                                     victim.change_current_hp(real_spell_effect_value_resisted)
                                     victim.hit_by_spell_check(real_spell_effect_value_resisted)
                             if spell_type in ["mp"]:
-                                pass
+                                if spell_effect_value > 0:
+                                    victim.change_current_mp(real_spell_effect_value)
+                                if spell_effect_value < 0:
+                                    victim.change_current_mp(real_spell_effect_value_resisted)
+                                    victim.hit_by_spell_check(real_spell_effect_value_resisted)
                             if spell_type in ["stam"]:
-                                pass
+                                if spell_effect_value > 0:
+                                    victim.change_current_stam(real_spell_effect_value)
+                                if spell_effect_value < 0:
+                                    victim.change_current_stam(real_spell_effect_value_resisted)
+                                    victim.hit_by_spell_check(real_spell_effect_value_resisted)
                             if spell_type in ["str"]:
                                 pass
                             if spell_type in ["agi"]:
@@ -708,13 +795,17 @@ class Spells_new:
                                 pass
                             if spell_type in ["skill"]:
                                 pass
-                            # lägg in can_cast_spell = False här
                         else:
-                            print("Not enough mana for {}".format(spell["name"]))
+                            print("Not enough mana for {}".format(self.spell_dict[(spell)]["name"]))
                 else:
                     print("You need to choose a spell first")
         else:
             print("You cannot cast a spell right now")
+        self.casting_spell = False
+        self.spell_timer_switch(False)
+
+    def on_loop_spells(self):
+        self.spell_timer_control()
 
 class IO:
 
@@ -735,6 +826,9 @@ class IO:
         # flytta dem från class Game hit för att det ska bli mer lättöverskådligt.
         pass
 
+class Collisions:
+    def __init__(self):
+        pass
 ### OBJEKT
 game_render = Rendering()
 game_input = Input()
