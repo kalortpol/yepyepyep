@@ -1,15 +1,24 @@
 class File():
 	def __init__(self):
-		# Image list är alla bilder i image-mappen som har hittats av
-		# get_file() och kan nu kallas för att laddas av load_image().
+		""" 
+		image_list är alla bilder i image-mappen som har hittats av
+		get_file()
+		"""
 		self.image_list = list()
+		
+		"""
+		loaded_images_dict är ett dict med alla bilder som har pygame.image.load:ats
+		"""
 		self.loaded_images_dict = dict()
+		
 		self.map_dict = dict()
 	
-	# Söker igenom my_dir (ange alltså directory som argument).
-	# Lagrar filer i listor, just nu
-	# .png-filer i self.image_dict
-	# .tmx-filer i self.map_dict
+	"""
+	 Söker igenom my_dir (ange alltså directory som argument).
+	 Lagrar filer i listor, just nu
+	 .png-filer i self.image_dict
+	 .tmx-filer i self.map_dict
+	"""
 	def get_files(self, my_dir):
  		file_list = next(os.walk(str(my_dir)))[2]
  		print(file_list)
@@ -19,9 +28,10 @@ class File():
 					self.image_list.append(found_file)
 				if ".tmx" in found_file:
 					self.map_dict.append(str(found_file))
-					
-	# Denna metod kallas för att få tag i rätt map utifrån, metoden kallas med map:ens filnamn som argument.
-	# Funkar med och utan string-formatering.
+	"""				
+	 Denna metod kallas för att få tag i rätt map utifrån, metoden kallas med map:ens filnamn som argument.
+	 Funkar med och utan string-formatering.
+	"""
 	def get_map(self, map_to_get):
 		for map_item in self.map_dict:
 			if map_item == str(map_to_get):
@@ -29,14 +39,18 @@ class File():
 			else:
 				print("Map not found!")
 				
-	# Denna metod kan kallas utifrån för att få tag i rätt bild, kan kallas med eller utan string-formatering. 
-	# Det är filnamnet som ska vara argument.
+	""" 
+	 Denna metod kan kallas utifrån för att få tag i rätt bild, kan kallas med eller utan string-formatering. 
+	 Det är filnamnet som ska vara argument.
+	 Den laddar alla bilder 1(!) gång med convert_alpha() och sedan gör den inte det igen,
+	 för att undvika onödiga laddningar. 
+	"""
 	def get_image(self, file_name):
-		name_var = self.loaded_image_dict[str(file_name)]
-		return name_var
-	
-	# Metoden laddar ALLA .png-filer med convert_alpha. Således ska object sedan ha self.image = file.get_image("filnamn"), se ovan
-	def load_image(self):
-		for image_item in self.image_list:
-			self.loaded_images_dict.append(str(image_item))
-			self.loaded_images_dict[str(image_item)] = pygame.image.load(str(image_item)).convert_alpha()
+		if str(file_name) in loaded_images_dict:
+			return loaded_images_dict[str(file_name)]
+		if not str(file_name) in loaded_images_dict:
+			image = pygame.image.load(str(file_name)).convert_alpha()
+			loaded_images_dict[str(file_name)] = image
+			return loaded_images_dict[str(file_name)]
+			
+file = File()
