@@ -1,0 +1,34 @@
+class File():
+	def __init__(self):
+		# Image list är alla bilder i image-mappen som har hittats av
+		# get_file() och kan nu kallas för att laddas av load_image().
+		self.image_list = list()
+		self.loaded_images_dict = dict()
+		self.map_dict = dict()
+	
+	def get_files(self):
+ 		file_list = next(os.walk('my_dir'))[2]
+ 		print(file_list)
+		for found_file in file_list:
+			if not found_file in self.image_list:
+				if ".png" in found_file:
+					self.image_list.append(found_file)
+				if ".tmx" in found_file:
+					self.map_dict.append(str(found_file))
+	
+	def get_map(self, map_to_get):
+		for map_item in self.map_dict:
+			if map_item == str(map_to_get):
+				return map_to_get
+			else:
+				print("Map not found!")
+	
+	def get_image(self, file_name):
+		name_var = self.loaded_image_dict[str(file_name)]
+		return name_var
+	
+	# Metoden laddar ALLA .png-filer med convert_alpha. Således ska object sedan ha self.image = file.get_image("filnamn"), se ovan
+	def load_image(self):
+		for image_item in self.image_list:
+			self.loaded_images_dict.append(str(image_item))
+			self.loaded_images_dict[str(image_item)] = pygame.image.load(str(image_item)).convert_alpha()
