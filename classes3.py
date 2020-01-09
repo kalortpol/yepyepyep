@@ -2,13 +2,13 @@ import pygame
 import pytmx
 import pyscroll
 from sys import exit
+import os
 
-pygame.init()
-
+"""RENDERING CALSS"""
 class Rendering:
     def __init__(self):
         self.size = self.width, self.height = 1024, 748
-        self.screen = None
+        self.screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
         self.running = True
         self.background = None
         self.tmx_data = None
@@ -25,7 +25,6 @@ class Rendering:
         self.map_data = pyscroll.TiledMapData(self.tmx_data)
         # Make the scrolling layer
         screen_size = (self.width, self.height)
-        # map_rect = pygame.Rect((0, 0), (self.width, self.height))
         self.map_layer = pyscroll.BufferedRenderer(self.map_data, screen_size, clamp_camera=True, tall_sprites=1)
         self.map_layer.zoom = 2
         # make the PyGame SpriteGroup with a scrolling map
@@ -34,7 +33,7 @@ class Rendering:
 
     def init_sprites(self):
         # Add sprites to the group
-        self.group.add(engine.player) # lista ut hur skiten funkar.. om jag orkar
+        self.group.add(player) # lista ut hur skiten funkar.. om jag orkar
         #self.group.add(monster_dummy)
         #self.group.add(monster_dummy2)
         # Center the layer and sprites on a sprite
@@ -42,16 +41,85 @@ class Rendering:
 
     def draw_and_blit(self):
         # Draw the layer
-        self.group.center(engine.player.rect)
+        self.group.center(player.rect)
         self.group.draw(self.screen)
         self.group.update()
         pygame.display.flip()
 
+""" objekt för rendering-klassen"""
+rendering = Rendering()
+
+
+"""FILES CLASS"""
+class File():
+    def __init__(self):
+        """
+        image_list är alla bilder i image-mappen som har hittats av
+        get_file()
+        """
+        self.image_list = list()
+
+        """
+        loaded_images_dict är ett dict med alla bilder som har pygame.image.load:ats
+        """
+        self.loaded_images_dict = dict()
+
+        self.map_dict = dict()
+
+    """
+     Söker igenom my_dir (ange alltså directory som argument).
+     Lagrar filer i listor, just nu
+     .png-filer i self.image_dict
+     .tmx-filer i self.map_dict
+    """
+
+    def get_files(self, my_dir):
+        file_list = next(os.walk(str(my_dir)))[2]
+        print(file_list)
+        for found_file in file_list:
+            if not found_file in self.image_list:
+                if ".png" in found_file:
+                    self.image_list.append(found_file)
+                if ".tmx" in found_file:
+                    self.map_dict.append(str(found_file))
+
+    """				
+     Denna metod kallas för att få tag i rätt map utifrån, metoden kallas med map:ens filnamn som argument.
+     Funkar med och utan string-formatering.
+    """
+
+    def get_map(self, map_to_get):
+        for map_item in self.map_dict:
+            if map_item == str(map_to_get):
+                return map_to_get
+            else:
+                print("Map not found!")
+
+    """ 
+     Denna metod kan kallas utifrån för att få tag i rätt bild, kan kallas med eller utan string-formatering. 
+     Det är filnamnet som ska vara argument.
+     Den laddar alla bilder 1(!) gång med convert_alpha() och sedan gör den inte det igen,
+     för att undvika onödiga laddningar. 
+    """
+
+    def get_image(self, file_name):
+        if str(file_name) in self.loaded_images_dict:
+            return self.loaded_images_dict[str(file_name)]
+        if not str(file_name) in self.loaded_images_dict:
+            image = pygame.image.load(str(file_name)).convert_alpha()
+            self.loaded_images_dict[str(file_name)] = image
+            return self.loaded_images_dict[str(file_name)]
+
+""" objekt för file-klassen"""
+file = File()
+
+
+"""PLAYER CLASS (PARENT TO MONSTER)"""
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.position = [100, 100]
-        self.image = engine.file.hero_img
+        self.image = file.get_image("hero1.png")
         self.rect = self.image.get_rect()
         self.xvel, self.yvel = 0, 0
         self.vitals = {"hp": 100, "mp": 100, "stam": 100}
@@ -67,19 +135,24 @@ class Player(pygame.sprite.Sprite):
         self.position[1] += self.yvel
         self.rect.center = self.position
 
+""" objekt för player-klassen"""
+player = Player()
+
+
+""" INPUT-CLASS"""
 class Game_input():
     def __init__(self):
         pass
 
     def handle_key(self):
         if pygame.key.get_pressed()[pygame.K_w]:
-            engine.player.move_player(0, -1)
+            player.move_player(0, -1)
         if pygame.key.get_pressed()[pygame.K_s]:
-            engine.player.move_player(0, 1)
+            player.move_player(0, 1)
         if pygame.key.get_pressed()[pygame.K_a]:
-            engine.player.move_player(-1, 0)
+            player.move_player(-1, 0)
         if pygame.key.get_pressed()[pygame.K_d]:
-            engine.player.move_player(1, 0)
+            player.move_player(1, 0)
         if pygame.key.get_pressed()[pygame.K_p]:
             print(engine.get_dt())
             print(engine.get_fps())
@@ -90,6 +163,11 @@ class Game_input():
     def handle_event(self):
         pass
 
+""" input-objektet"""
+game_input = Game_input()
+
+
+""" GAME ENGINE """
 class Engine:
     """Här ska alla objekt ligga, de ska sedan aldrig kallas direkt utan alltid via inneboende metoder.
     Gör gärna en metod som hjälper till att kalla andra objekts metoder.
@@ -98,10 +176,7 @@ class Engine:
         self.running = False
         self.clock = pygame.time.Clock()
         # all objects below, everything will be initiated correctly hopefully
-        self.file = Files()
-        self.rendering = Rendering()
-        self.player = Player()
-        self.game_input = Game_input()
+        rendering.init_graphics()
         self.loops = 0
         self.fps = 900
 
@@ -115,8 +190,8 @@ class Engine:
     Jag har markerat den punkt som det hittills fungerar vid med en kommentar"""
     def start(self):
         """Här under fungerar metoderna garanterat tillsammans"""
-        self.rendering.init_graphics()
-        self.rendering.init_sprites()
+        rendering.init_graphics()
+        rendering.init_sprites()
         self.running = True
         self.main_loop()
 
@@ -124,11 +199,11 @@ class Engine:
         pass
 
     def on_loop(self):
-        self.game_input.handle_key()
+        game_input.handle_key()
         pass
 
     def on_render(self):
-        self.rendering.draw_and_blit()
+        rendering.draw_and_blit()
 
     def main_loop(self):
         while self.running:
@@ -141,10 +216,8 @@ class Engine:
             self.on_render()
             self.clock.tick(self.fps)
 
-class Files:
-    def __init__(self):
-        self.hero_img = pygame.image.load("hero1.png")
-
-
+""" game-engine-objektet"""
 engine = Engine()
+
+
 engine.start()
